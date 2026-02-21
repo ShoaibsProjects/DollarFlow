@@ -25,8 +25,9 @@ const countries = [
 ];
 
 function SettingRow({ icon: Icon, label, description, children, onClick }) {
+  const Tag = onClick ? 'button' : 'div';
   return (
-    <button
+    <Tag
       onClick={onClick}
       className="w-full flex items-center gap-4 p-4 hover:bg-secondary/30 transition-colors rounded-xl text-left"
     >
@@ -38,7 +39,7 @@ function SettingRow({ icon: Icon, label, description, children, onClick }) {
         {description && <p className="text-xs text-muted-foreground">{description}</p>}
       </div>
       {children || <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
-    </button>
+    </Tag>
   );
 }
 
