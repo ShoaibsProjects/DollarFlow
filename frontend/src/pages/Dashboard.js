@@ -10,23 +10,29 @@ import axios from "axios";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 function AnimatedNumber({ value, prefix = "$", decimals = 2 }) {
-  const [display, setDisplay] = useState(0);
+  const [display, setDisplay] = useState(value);
+  const hasAnimated = useRef(false);
   useEffect(() => {
-    let start = 0;
-    const end = value;
-    const duration = 1000;
-    const steps = 30;
-    const increment = (end - start) / steps;
-    let current = start;
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= end) {
-        current = end;
-        clearInterval(timer);
-      }
-      setDisplay(current);
-    }, duration / steps);
-    return () => clearInterval(timer);
+    if (!hasAnimated.current && value > 0) {
+      hasAnimated.current = true;
+      let start = 0;
+      const end = value;
+      const duration = 800;
+      const steps = 25;
+      const increment = (end - start) / steps;
+      let current = start;
+      const timer = setInterval(() => {
+        current += increment;
+        if (current >= end) {
+          current = end;
+          clearInterval(timer);
+        }
+        setDisplay(current);
+      }, duration / steps);
+      return () => clearInterval(timer);
+    } else {
+      setDisplay(value);
+    }
   }, [value]);
   return <span>{prefix}{display.toFixed(decimals)}</span>;
 }
