@@ -230,27 +230,168 @@ print('SUCCESS: User and session created');
             self.log(f"   💸 Created transaction: {tx.get('id', 'Unknown')}")
             self.log(f"   💰 Amount: ${tx.get('amount', 0)} to {tx.get('recipient_name', 'Unknown')}")
 
-    def test_chat_endpoint(self):
-        """Test chat-to-pay endpoint"""
-        self.log("\n=== TESTING CHAT-TO-PAY ===")
+    def test_family_vault_transaction_integration(self):
+        """Test the new Family Vault <-> Transaction integration bug fix"""
+        self.log("\n=== TESTING FAMILY VAULT TRANSACTION INTEGRATION ===")
         
         if not self.session_token:
-            self.log("❌ No session token available, skipping chat test")
-            return
+            self.log("❌ No session token available, skipping family vault integration test")
+            return False
 
-        chat_message = {
-            "message": "What's my balance?"
-        }
+        # Step 1: Get initial vault state 
+        success, vault_data = self.run_test("Get Family Vault (Initial)", "GET", "family-vault", 200)
+        if not success:
+            return False
+            
+        vault = vault_data.get('vault')
+        members = vault_data.get('members', [])
         
-        # Chat API can be slow due to LLM processing
-        self.log("   ⏳ Testing chat (may take 5-10 seconds)...")
-        success, response = self.run_test("Chat to Pay", "POST", "chat", 200, chat_message)
-        if success and isinstance(response, dict):
-            message = response.get('message', '')
-            action = response.get('action')
-            self.log(f"   💬 Chat Response: {message[:100]}...")
-            if action:
-                self.log(f"   🎯 Action Detected: {action}")
+        if not members:
+            self.log("❌ No family members found for testing")
+            return False
+            
+        # Pick first member for testing
+        test_member = members[0]
+        member_id = test_member['id']
+        member_name = test_member['name']
+        initial_balance = test_member['current_balance']
+        initial_vault_total = vault.get('total_balance', 0) if vault else 0
+        
+        self.log(f"   🎯 Testing with member: {member_name} (ID: {member_id})")
+        self.log(f"   💰 Initial member balance: ${initial_balance}")
+        self.log(f"   🏦 Initial vault total: ${initial_vault_total}")
+
+        # Step 2: Test POST /api/family-vault/send/{member_id}
+        send_amount = 25.0
+        send_data = {"amount": send_amount}
+        
+        success, send_result = self.run_test(
+            f"Send ${send_amount} to Family Member", 
+            "POST", 
+            f"family-vault/send/{member_id}", 
+            200, 
+            send_data
+        )
+        
+        if not success:
+            return False
+            
+        # Verify the response contains both transaction and updated member
+        if isinstance(send_result, dict):
+            transaction = send_result.get('transaction')
+            updated_member = send_result.get('member')
+            
+            if transaction:
+                self.log(f"   📝 Transaction created: {transaction.get('id', 'Unknown')}")
+                self.log(f"   💸 Amount: ${transaction.get('amount', 0)} to {transaction.get('recipient_name', 'Unknown')}")
+                
+            if updated_member:
+                new_balance = updated_member.get('current_balance', 0)
+                expected_balance = initial_balance + send_amount
+                self.log(f"   💰 Member balance updated: ${new_balance} (expected: ${expected_balance})")
+                
+                if abs(new_balance - expected_balance) < 0.01:
+                    self.log(f"   ✅ Balance correctly increased by ${send_amount}")
+                else:
+                    self.log(f"   ❌ Balance mismatch! Expected ${expected_balance}, got ${new_balance}")
+                    return False
+
+        # Step 3: Verify GET /api/family-vault shows updated balances
+        success, updated_vault_data = self.run_test("Get Family Vault (After Send)", "GET", "family-vault", 200)
+        if not success:
+            return False
+            
+        updated_vault = updated_vault_data.get('vault')
+        updated_members = updated_vault_data.get('members', [])
+        
+        # Find our test member in the updated list
+        test_member_updated = None
+        for member in updated_members:
+            if member['id'] == member_id:
+                test_member_updated = member
+                break
+                
+        if test_member_updated:
+            final_balance = test_member_updated['current_balance']
+            expected_final = initial_balance + send_amount
+            
+            self.log(f"   📊 Final member balance from GET: ${final_balance}")
+            
+            if abs(final_balance - expected_final) < 0.01:
+                self.log(f"   ✅ GET /api/family-vault confirms balance increase")
+            else:
+                self.log(f"   ❌ GET endpoint shows wrong balance: ${final_balance}, expected: ${expected_final}")
+                return False
+                
+        # Step 4: Verify vault total_balance updated
+        if updated_vault:
+            final_vault_total = updated_vault.get('total_balance', 0)
+            expected_vault_total = initial_vault_total + send_amount
+            
+            self.log(f"   🏦 Final vault total: ${final_vault_total}")
+            self.log(f"   🎯 Expected vault total: ${expected_vault_total}")
+            
+            if abs(final_vault_total - expected_vault_total) < 0.01:
+                self.log(f"   ✅ Vault total_balance correctly updated")
+            else:
+                self.log(f"   ❌ Vault total mismatch! Expected ${expected_vault_total}, got ${final_vault_total}")
+                return False
+
+        # Step 5: Test POST /api/transactions with family member name
+        self.log(f"\n   🔄 Testing regular transaction to family member...")
+        
+        # Get another family member for this test
+        other_member = None
+        for member in updated_members:
+            if member['id'] != member_id:
+                other_member = member
+                break
+                
+        if other_member:
+            other_name = other_member['name']
+            other_initial_balance = other_member['current_balance']
+            test_amount = 15.0
+            
+            transaction_data = {
+                "type": "send",
+                "amount": test_amount,
+                "recipient_name": other_name,
+                "recipient_address": "0x1234567890abcdef",
+                "category": "family",
+                "note": "Test family transaction integration"
+            }
+            
+            success, tx_result = self.run_test(
+                f"Create Transaction to Family Member ({other_name})", 
+                "POST", 
+                "transactions", 
+                200, 
+                transaction_data
+            )
+            
+            if success:
+                self.log(f"   📝 Transaction to {other_name} created successfully")
+                
+                # Verify family member balance was updated
+                success, final_vault_data = self.run_test("Get Family Vault (After Transaction)", "GET", "family-vault", 200)
+                if success:
+                    final_members = final_vault_data.get('members', [])
+                    for member in final_members:
+                        if member['name'] == other_name:
+                            final_balance = member['current_balance']
+                            expected_balance = other_initial_balance + test_amount
+                            
+                            self.log(f"   💰 {other_name} balance after transaction: ${final_balance}")
+                            
+                            if abs(final_balance - expected_balance) < 0.01:
+                                self.log(f"   ✅ Transaction API correctly updated family member balance")
+                            else:
+                                self.log(f"   ❌ Transaction API failed to update balance correctly")
+                                return False
+                            break
+
+        self.log(f"   🎉 Family Vault <-> Transaction integration working correctly!")
+        return True
 
     def test_endpoints_without_auth(self):
         """Test that protected endpoints return 401 without auth"""
