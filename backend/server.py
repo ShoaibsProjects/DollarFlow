@@ -664,7 +664,13 @@ async def get_dashboard(request: Request):
         {"user_id": user["user_id"]}, {"_id": 0}
     ).sort("timestamp", -1).to_list(10)
     
-    total_balance = round(random.uniform(1200, 3500), 2)
+    # Compute balance from all transactions (deterministic)
+    all_txs = await db.transactions.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
+    received = sum(t["amount"] for t in all_txs if t["type"] == "receive")
+    sent = sum(t["amount"] + t.get("fee", 0.03) for t in all_txs if t["type"] == "send")
+    # Start with a base of 2500 USDC (initial deposit) and adjust with transactions
+    base_balance = user.get("initial_balance", 2500.00)
+    total_balance = round(base_balance + received - sent, 2)
     
     currency = user.get("currency", "USD")
     local_rate = CURRENCY_DATA.get(currency, {}).get("rate", 1)
