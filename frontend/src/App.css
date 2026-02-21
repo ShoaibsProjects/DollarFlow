@@ -1,34 +1,69 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+/* DollarFlow App Styles */
+.App {
+  min-height: 100vh;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+/* Balance card glass effect */
+.balance-glass {
+  background: linear-gradient(135deg, rgba(0, 82, 255, 0.15) 0%, rgba(0, 211, 149, 0.1) 50%, rgba(0, 82, 255, 0.05) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+/* Chat bubbles */
+.chat-bubble-user {
+  background: #0052FF;
+  color: white;
+  border-radius: 20px 20px 4px 20px;
 }
 
-.App-link {
-    color: #61dafb;
+.chat-bubble-assistant {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  border-radius: 20px 20px 20px 4px;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Map marker custom */
+.spot-marker {
+  background: #0052FF;
+  border: 3px solid white;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  box-shadow: 0 2px 8px rgba(0, 82, 255, 0.4);
+}
+
+/* Family member card */
+.family-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.family-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* Landing page sections */
+.feature-card {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-8px);
+}
+
+/* Pill nav items */
+.nav-pill {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-pill.active {
+  background: #0052FF;
+  color: white;
+}
+
+/* QR Code container */
+.qr-glow {
+  box-shadow: 0 0 60px rgba(0, 82, 255, 0.2);
 }
