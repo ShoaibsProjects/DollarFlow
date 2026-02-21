@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, User, DollarSign, Send as SendIcon, Check, Loader2, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const contacts = [
+const fallbackContacts = [
   { name: "Maria Santos", relationship: "Mom", color: "#FF6B9D" },
   { name: "Carlos Reyes", relationship: "Brother", color: "#4ECDC4" },
   { name: "Ana Gutierrez", relationship: "Sister", color: "#FFE66D" },
@@ -19,11 +19,31 @@ const contacts = [
 
 export default function SendMoney() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1); // 1: amount, 2: recipient, 3: review, 4: success
+  const [step, setStep] = useState(1);
   const [amount, setAmount] = useState("");
   const [recipient, setRecipient] = useState(null);
   const [customAddress, setCustomAddress] = useState("");
   const [sending, setSending] = useState(false);
+  const [contacts, setContacts] = useState(fallbackContacts);
+
+  // Load family members as contacts
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        const res = await axios.get(`${API}/family-vault`, { withCredentials: true });
+        if (res.data.members?.length > 0) {
+          const familyContacts = res.data.members.map(m => ({
+            name: m.name,
+            relationship: m.relationship,
+            color: m.avatar_color,
+            memberId: m.id,
+          }));
+          setContacts(familyContacts);
+        }
+      } catch { /* use fallback */ }
+    };
+    loadContacts();
+  }, []);
 
   const fee = 0.03;
   const totalAmount = amount ? parseFloat(amount) + fee : 0;
@@ -31,13 +51,22 @@ export default function SendMoney() {
   const handleSend = async () => {
     setSending(true);
     try {
-      await axios.post(`${API}/transactions`, {
-        type: "send",
-        amount: parseFloat(amount),
-        recipient_name: recipient?.name || "Unknown",
-        recipient_address: customAddress || `0x${Math.random().toString(16).slice(2, 42)}`,
-        category: "transfer"
-      }, { withCredentials: true });
+      // If recipient is a family member, use the dedicated endpoint to update their balance
+      if (recipient?.memberId) {
+        await axios.post(
+          `${API}/family-vault/send/${recipient.memberId}`,
+          { amount: parseFloat(amount) },
+          { withCredentials: true }
+        );
+      } else {
+        await axios.post(`${API}/transactions`, {
+          type: "send",
+          amount: parseFloat(amount),
+          recipient_name: recipient?.name || "Unknown",
+          recipient_address: customAddress || `0x${Math.random().toString(16).slice(2, 42)}`,
+          category: "transfer"
+        }, { withCredentials: true });
+      }
       setStep(4);
       toast.success("Payment sent successfully!");
     } catch (err) {
