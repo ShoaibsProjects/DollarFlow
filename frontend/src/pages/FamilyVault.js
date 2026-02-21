@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
-import { Users, Plus, DollarSign, ChevronRight, Settings, Eye, EyeOff, ArrowUpRight } from "lucide-react";
+import { Users, Plus, DollarSign, ChevronRight, Settings, Eye, EyeOff, ArrowUpRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -14,9 +13,11 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const avatarColors = ["#FF6B9D", "#4ECDC4", "#FFE66D", "#A8E6CF", "#DDA0DD", "#87CEEB", "#FFA07A", "#98D8C8"];
 
-function MemberCard({ member, onUpdate }) {
+function MemberCard({ member, onUpdate, onSend }) {
   const spent = member.monthly_allocation - member.current_balance;
-  const percentage = member.monthly_allocation > 0 ? (spent / member.monthly_allocation) * 100 : 0;
+  const percentage = member.monthly_allocation > 0
+    ? Math.min((member.current_balance / member.monthly_allocation) * 100, 100)
+    : 0;
 
   return (
     <motion.div
@@ -58,12 +59,17 @@ function MemberCard({ member, onUpdate }) {
         </div>
         <Progress value={Math.min(percentage, 100)} className="h-2" />
         <p className="text-xs text-muted-foreground mt-1">
-          {percentage.toFixed(0)}% used this month
+          {percentage.toFixed(0)}% funded this month
         </p>
       </div>
 
       <div className="flex gap-2 mt-3">
-        <Button size="sm" variant="outline" className="flex-1 rounded-full text-xs h-8">
+        <Button
+          size="sm"
+          onClick={() => onSend(member)}
+          data-testid={`send-to-${member.id}`}
+          className="flex-1 rounded-full text-xs h-8 bg-[#0052FF] hover:bg-[#0040CC] text-white"
+        >
           <ArrowUpRight className="w-3 h-3 mr-1" /> Send
         </Button>
         <Button size="sm" variant="outline" className="rounded-full text-xs h-8 px-3">
@@ -78,6 +84,10 @@ export default function FamilyVault() {
   const [vaultData, setVaultData] = useState({ vault: null, members: [] });
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [sendDialogOpen, setSendDialogOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [sendAmount, setSendAmount] = useState("");
+  const [sending, setSending] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", relationship: "", monthly_allocation: 100 });
 
   const fetchVault = useCallback(async () => {
@@ -114,6 +124,33 @@ export default function FamilyVault() {
       fetchVault();
     } catch (err) {
       toast.error("Failed to update member");
+    }
+  };
+
+  const openSendDialog = (member) => {
+    setSelectedMember(member);
+    setSendAmount("");
+    setSendDialogOpen(true);
+  };
+
+  const handleSendToMember = async () => {
+    if (!selectedMember || !sendAmount || parseFloat(sendAmount) <= 0) return;
+    setSending(true);
+    try {
+      const res = await axios.post(
+        `${API}/family-vault/send/${selectedMember.id}`,
+        { amount: parseFloat(sendAmount) },
+        { withCredentials: true }
+      );
+      toast.success(`Sent $${parseFloat(sendAmount).toFixed(2)} to ${selectedMember.name}!`);
+      setSendDialogOpen(false);
+      setSendAmount("");
+      setSelectedMember(null);
+      fetchVault(); // Refresh to show updated balances
+    } catch (err) {
+      toast.error("Failed to send funds");
+    } finally {
+      setSending(false);
     }
   };
 
@@ -193,6 +230,65 @@ export default function FamilyVault() {
         </Dialog>
       </div>
 
+      {/* Send to Member Dialog */}
+      <Dialog open={sendDialogOpen} onOpenChange={setSendDialogOpen}>
+        <DialogContent className="rounded-2xl" data-testid="send-to-member-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              Send to {selectedMember?.name}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedMember && (
+            <div className="space-y-4 mt-4">
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-secondary/30">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                  style={{ background: selectedMember.avatar_color }}>
+                  {selectedMember.name[0]}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{selectedMember.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Balance: ${selectedMember.current_balance.toFixed(2)} / ${selectedMember.monthly_allocation}/mo
+                  </p>
+                </div>
+              </div>
+              <div>
+                <Label>Amount ($)</Label>
+                <div className="relative mt-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">$</span>
+                  <Input
+                    type="number"
+                    placeholder="0.00"
+                    value={sendAmount}
+                    onChange={(e) => setSendAmount(e.target.value)}
+                    data-testid="send-member-amount"
+                    className="pl-7 rounded-xl text-lg font-semibold"
+                    autoFocus
+                  />
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground flex justify-between px-1">
+                <span>Fee: $0.03</span>
+                <span>Arrives instantly</span>
+              </div>
+              <Button
+                onClick={handleSendToMember}
+                disabled={!sendAmount || parseFloat(sendAmount) <= 0 || sending}
+                data-testid="confirm-send-to-member"
+                className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full py-5"
+              >
+                {sending ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : (
+                  <ArrowUpRight className="w-4 h-4 mr-2" />
+                )}
+                {sending ? "Sending..." : `Send $${sendAmount || '0.00'} to ${selectedMember.name}`}
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Vault Summary */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -214,7 +310,9 @@ export default function FamilyVault() {
         <div className="grid grid-cols-2 gap-4">
           <div className="p-3 rounded-xl bg-secondary/30">
             <div className="text-xs text-muted-foreground mb-1">Total Balance</div>
-            <div className="text-xl font-heading font-bold text-foreground">${totalBalance.toFixed(2)}</div>
+            <div className="text-xl font-heading font-bold text-foreground" data-testid="vault-total-balance">
+              ${totalBalance.toFixed(2)}
+            </div>
           </div>
           <div className="p-3 rounded-xl bg-secondary/30">
             <div className="text-xs text-muted-foreground mb-1">Monthly Total</div>
@@ -233,7 +331,11 @@ export default function FamilyVault() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
             >
-              <MemberCard member={member} onUpdate={updateMember} />
+              <MemberCard
+                member={member}
+                onUpdate={updateMember}
+                onSend={openSendDialog}
+              />
             </motion.div>
           ))}
         </div>
