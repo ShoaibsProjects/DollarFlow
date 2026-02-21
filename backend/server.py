@@ -312,6 +312,36 @@ async def create_transaction(request: Request):
     }
     await db.transactions.insert_one(tx)
     tx.pop("_id", None)
+
+    # If sending to a family member, update their balance
+    recipient_name = body.get("recipient_name", "")
+    if recipient_name and tx["type"] == "send":
+        vault = await db.family_vaults.find_one({"user_id": user["user_id"]}, {"_id": 0})
+        if vault:
+            member = await db.family_members.find_one(
+                {"vault_id": vault["id"], "name": {"$regex": f"^{recipient_name}$", "$options": "i"}},
+                {"_id": 0}
+            )
+            if member:
+                new_balance = member["current_balance"] + body["amount"]
+                await db.family_members.update_one(
+                    {"id": member["id"]},
+                    {"$set": {"current_balance": round(new_balance, 2)}}
+                )
+                # Update vault total_balance
+                all_members = await db.family_members.find({"vault_id": vault["id"]}, {"_id": 0}).to_list(20)
+                vault_total = sum(m["current_balance"] for m in all_members)
+                # Re-read the updated member to get correct balance
+                updated_member = await db.family_members.find_one({"id": member["id"]}, {"_id": 0})
+                vault_total = sum(
+                    (m["current_balance"] if m["id"] != member["id"] else updated_member["current_balance"])
+                    for m in all_members
+                )
+                await db.family_vaults.update_one(
+                    {"id": vault["id"]},
+                    {"$set": {"total_balance": round(vault_total, 2)}}
+                )
+
     return tx
 
 # ==================== FAMILY VAULT ====================
