@@ -174,8 +174,10 @@ print('SUCCESS: User and session created');
 
         # Dashboard
         success, dashboard = self.run_test("Get Dashboard", "GET", "dashboard", 200)
+        initial_balance = 0
         if success and isinstance(dashboard, dict):
-            self.log(f"   💰 Balance: ${dashboard.get('balance', 'Unknown')}")
+            initial_balance = dashboard.get('balance', 0)
+            self.log(f"   💰 Balance: ${initial_balance}")
             self.log(f"   🏦 Local Balance: {dashboard.get('balance_local', 'Unknown')} {dashboard.get('local_currency', '')}")
 
         # Transactions
@@ -203,6 +205,8 @@ print('SUCCESS: User and session created');
         if success and isinstance(shield, dict):
             self.log(f"   🛡️  Shield Enabled: {shield.get('enabled', False)}")
             self.log(f"   💵 Money Saved: ${shield.get('money_saved', 0)}")
+            
+        return initial_balance
 
     def test_create_transaction(self):
         """Test creating a new transaction"""
