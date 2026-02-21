@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
 import { Send, QrCode, ArrowDownUp, Shield, ArrowUpRight, ArrowDownLeft, ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
