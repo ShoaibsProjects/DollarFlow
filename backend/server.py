@@ -510,7 +510,7 @@ async def get_inflation_shield(request: Request):
         "currency": currency,
         "depreciation_6m": depreciation_6m,
         "usdc_loss_6m": 0.1,
-        "money_saved": round(random.uniform(50, 500), 2),
+        "money_saved": round(depreciation_6m * 5.2, 2),
         "historical_comparison": f"If you held {currency} for 6 months, you'd have lost {depreciation_6m}%. With DollarFlow Shield, you'd have lost 0.1%."
     }
 
