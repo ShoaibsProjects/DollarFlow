@@ -488,6 +488,9 @@ def main():
         # Step 7: Test chat endpoint (might be slow)
         tester.test_chat_endpoint()
         
+        # Step 8: Test Family Vault Transaction Integration (Bug Fix)
+        tester.test_family_vault_transaction_integration()
+        
     finally:
         # Always clean up test data
         tester.cleanup_test_data()
