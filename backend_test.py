@@ -524,11 +524,11 @@ def main():
         # Step 6: Test transaction creation
         tester.test_create_transaction()
         
-        # Step 7: Test chat endpoint (might be slow)
-        tester.test_chat_endpoint()
-        
-        # Step 8: Test Family Vault Transaction Integration (Bug Fix)
+        # Step 7: Test Family Vault Transaction Integration (Bug Fix)
         tester.test_family_vault_transaction_integration()
+        
+        # Step 8: Test chat endpoint (might be slow)
+        tester.test_chat_endpoint()
         
     finally:
         # Always clean up test data
