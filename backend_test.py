@@ -102,7 +102,45 @@ db.user_sessions.insertOne({{
   expires_at: new Date(Date.now() + 7*24*60*60*1000).toISOString(),
   created_at: new Date().toISOString()
 }});
-print('SUCCESS: User and session created');
+
+// Create family vault and members for testing
+var vaultId = 'vault_' + Math.random().toString(36).substr(2, 12);
+var now = new Date();
+
+// Insert vault
+db.family_vaults.insertOne({{
+  id: vaultId,
+  user_id: userId,
+  name: 'Test Family Vault',
+  total_balance: 469.75,
+  created_at: now.toISOString()
+}});
+
+// Insert family members
+var members = [
+  {{name: 'Maria', relationship: 'Mom', color: '#FF6B9D', allocation: 200, balance: 145.50}},
+  {{name: 'Carlos', relationship: 'Brother', color: '#4ECDC4', allocation: 150, balance: 82.00}},
+  {{name: 'Ana', relationship: 'Sister', color: '#FFE66D', allocation: 100, balance: 67.25}},
+  {{name: 'Papa', relationship: 'Dad', color: '#A8E6CF', allocation: 175, balance: 120.00}},
+  {{name: 'Sofia', relationship: 'Daughter', color: '#DDA0DD', allocation: 75, balance: 55.00}}
+];
+
+for (var i = 0; i < members.length; i++) {{
+  var m = members[i];
+  db.family_members.insertOne({{
+    id: 'member_' + Math.random().toString(36).substr(2, 12),
+    vault_id: vaultId,
+    user_id: userId,
+    name: m.name,
+    relationship: m.relationship,
+    avatar_color: m.color,
+    monthly_allocation: m.allocation,
+    current_balance: m.balance,
+    visibility_enabled: true
+  }});
+}}
+
+print('SUCCESS: User, session, and family data created');
 """
         
         try:
@@ -113,6 +151,7 @@ print('SUCCESS: User and session created');
                 self.session_token = session_token
                 self.log(f"✅ Test user created - ID: {user_id}")
                 self.log(f"✅ Session token: {session_token}")
+                self.log(f"✅ Family vault and members created")
                 return True
             else:
                 self.log(f"❌ Failed to create test user: {result.stderr}")
