@@ -1,0 +1,135 @@
+{
+  "identity": {
+    "name": "DollarFlow",
+    "mission": "Decentralized USDC stablecoin payment platform for global workers",
+    "tone": "Premium, Trustworthy, Global, Accessible, Empowering",
+    "aesthetic": "Linear meets Cash App - Clean, Minimal, Dark Mode First"
+  },
+  "typography": {
+    "headings": {
+      "family": "Space Grotesk",
+      "weights": ["600", "700"],
+      "usage": "Hero titles, Section headers, Big numbers"
+    },
+    "body": {
+      "family": "Inter",
+      "weights": ["400", "500", "600"],
+      "usage": "UI elements, paragraphs, labels"
+    }
+  },
+  "colors": {
+    "theme": {
+      "default": "dark",
+      "toggle": true
+    },
+    "palette": {
+      "primary": "#0052FF",
+      "primary_foreground": "#FFFFFF",
+      "background": {
+        "dark": "#0A0B0D",
+        "light": "#F7F8FA"
+      },
+      "surface": {
+        "dark": "#16181C",
+        "light": "#FFFFFF"
+      },
+      "accent": {
+        "usdc_green": "#00D395",
+        "expense_red": "#FF6B6B",
+        "highlight": "#2E3339"
+      },
+      "text": {
+        "primary_dark": "#FFFFFF",
+        "secondary_dark": "#A0A0A0",
+        "primary_light": "#0A0B0D",
+        "secondary_light": "#64748B"
+      },
+      "border": {
+        "dark": "rgba(255, 255, 255, 0.1)",
+        "light": "rgba(0, 0, 0, 0.1)"
+      }
+    },
+    "gradients": {
+      "hero_mesh": "radial-gradient(circle at 50% -20%, #0052FF 0%, transparent 60%), radial-gradient(circle at 80% 20%, #00D395 0%, transparent 50%)",
+      "card_surface": "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)",
+      "glass": "rgba(22, 24, 28, 0.7)"
+    }
+  },
+  "spacing_layout": {
+    "grid_system": "8px base",
+    "container": {
+      "mobile": "p-4",
+      "tablet": "p-8",
+      "desktop": "max-w-7xl mx-auto px-8"
+    },
+    "radius": {
+      "card": "16px",
+      "button": "9999px (Pill)",
+      "input": "12px"
+    },
+    "bento_grid": {
+      "dashboard": "grid grid-cols-1 md:grid-cols-3 gap-4",
+      "widgets": "h-full w-full rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6"
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full px-6 py-3 font-medium transition-all shadow-[0_0_20px_-5px_#0052FF]",
+      "secondary": "bg-white/10 hover:bg-white/20 text-white rounded-full px-6 py-3 font-medium backdrop-blur-sm transition-all"
+    },
+    "cards": {
+      "glass": "bg-black/40 backdrop-blur-xl border border-white/10 shadow-2xl rounded-2xl",
+      "solid": "bg-[#16181C] border border-white/5 rounded-2xl"
+    },
+    "inputs": {
+      "style": "bg-white/5 border border-white/10 focus:border-[#0052FF] focus:ring-1 focus:ring-[#0052FF] rounded-xl px-4 py-3 text-white placeholder:text-gray-500 transition-all outline-none"
+    }
+  },
+  "motion": {
+    "library": "framer-motion",
+    "defaults": {
+      "transition": {
+        "type": "spring",
+        "stiffness": 300,
+        "damping": 30
+      },
+      "page_transition": {
+        "initial": { "opacity": 0, "y": 20 },
+        "animate": { "opacity": 1, "y": 0 },
+        "exit": { "opacity": 0, "y": -20 }
+      },
+      "hover_card": {
+        "scale": 1.02,
+        "y": -5
+      }
+    }
+  },
+  "assets": {
+    "icons": {
+      "library": "lucide-react",
+      "style": "stroke-width=1.5"
+    },
+    "images": {
+      "hero_main": "https://images.unsplash.com/photo-1651493355781-20b4e12f3231?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxjb25maWRlbnQlMjBwZXJzb24lMjB1c2luZyUyMHBob25lJTIwdXJiYW4lMjB0cmF2ZWwlMjBmaW50ZWNofGVufDB8fHx8MTc3MTcwNTM2Nnww&ixlib=rb-4.1.0&q=85",
+      "testimonials": [
+        "https://images.unsplash.com/photo-1675186914580-94356f7c012c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwxfHxkaXZlcnNlJTIwcG9ydHJhaXQlMjBzbWlsaW5nJTIwcHJvZmVzc2lvbmFsJTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNzA1MzY3fDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1675526607070-f5cbd71dde92?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwyfHxkaXZlcnNlJTIwcG9ydHJhaXQlMjBzbWlsaW5nJTIwcHJvZmVzc2lvbmFsJTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNzA1MzY3fDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1755190897791-7040dfdb988f?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTF8MHwxfHNlYXJjaHwzfHxkaXZlcnNlJTIwcG9ydHJhaXQlMjBzbWlsaW5nJTIwcHJvZmVzc2lvbmFsJTIwaGVhZHNob3R8ZW58MHx8fHwxNzcxNzA1MzY3fDA&ixlib=rb-4.1.0&q=85"
+      ],
+      "family_vault": "https://images.pexels.com/photos/4262416/pexels-photo-4262416.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "team_collaboration": "https://images.pexels.com/photos/8117466/pexels-photo-8117466.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    }
+  },
+  "universal_guidelines": [
+    "Avoid generic 'crypto' look (no neon purple lines, no matrix rain).",
+    "Use 'Linear' aesthetic: subtle borders, high contrast text, clean typography.",
+    "Dark mode is default, but must support light mode via class toggle.",
+    "All interactive elements must have hover/active states.",
+    "No gradients on text unless for very specific hero emphasis.",
+    "Use skeleton loaders for data fetching states.",
+    "Charts must use Recharts with custom tooltips (glassmorphism style).",
+    "Maps use Leaflet with custom dark tiles (e.g., CartoDB Dark Matter).",
+    "Mobile-first: Touch targets must be at least 44px."
+  ],
+  "instructions_to_main_agent": "Implement the design system using Tailwind CSS utility classes. Create reusable components in /src/components/ui/ that match these guidelines. Ensure Space Grotesk is imported from Google Fonts for headings. Use Lucide React for all icons."
+}
