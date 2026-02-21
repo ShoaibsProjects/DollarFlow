@@ -398,6 +398,57 @@ async def update_family_member(member_id: str, request: Request):
     member = await db.family_members.find_one({"id": member_id}, {"_id": 0})
     return member
 
+@api_router.post("/family-vault/send/{member_id}")
+async def send_to_family_member(member_id: str, request: Request):
+    """Send funds to a specific family member — updates their balance and creates a transaction."""
+    user = await get_current_user(request)
+    body = await request.json()
+    amount = body.get("amount", 0)
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    member = await db.family_members.find_one(
+        {"id": member_id, "user_id": user["user_id"]}, {"_id": 0}
+    )
+    if not member:
+        raise HTTPException(status_code=404, detail="Family member not found")
+
+    # Update member balance
+    new_balance = round(member["current_balance"] + amount, 2)
+    await db.family_members.update_one(
+        {"id": member_id}, {"$set": {"current_balance": new_balance}}
+    )
+
+    # Update vault total
+    vault = await db.family_vaults.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    if vault:
+        all_members = await db.family_members.find({"vault_id": vault["id"]}, {"_id": 0}).to_list(20)
+        vault_total = sum(m["current_balance"] for m in all_members)
+        await db.family_vaults.update_one(
+            {"id": vault["id"]}, {"$set": {"total_balance": round(vault_total, 2)}}
+        )
+
+    # Create the transaction record
+    tx = {
+        "id": f"tx_{uuid.uuid4().hex[:12]}",
+        "user_id": user["user_id"],
+        "type": "send",
+        "amount": amount,
+        "currency": "USDC",
+        "recipient_name": member["name"],
+        "recipient_address": None,
+        "category": "family",
+        "status": "completed",
+        "fee": 0.03,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "note": f"Family Vault: sent to {member['name']} ({member['relationship']})"
+    }
+    await db.transactions.insert_one(tx)
+    tx.pop("_id", None)
+
+    updated_member = await db.family_members.find_one({"id": member_id}, {"_id": 0})
+    return {"transaction": tx, "member": updated_member}
+
 # ==================== SPOTS / AGENTS ====================
 
 MOCK_SPOTS = [
