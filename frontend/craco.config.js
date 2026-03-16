@@ -1,5 +1,6 @@
 // craco.config.js
 const path = require("path");
+const webpack = require("webpack");
 require("dotenv").config();
 
 // Check if we're in development/preview mode (not production build)
@@ -47,6 +48,30 @@ const webpackConfig = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
+
+      // Node.js polyfills for Web3 libraries
+      webpackConfig.resolve.fallback = {
+        ...webpackConfig.resolve.fallback,
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        http: require.resolve('stream-http'),
+        https: require.resolve('https-browserify'),
+        os: require.resolve('os-browserify/browser'),
+        buffer: require.resolve('buffer/'),
+        process: require.resolve('process/browser'),
+        assert: require.resolve('assert/'),
+        url: require.resolve('url/'),
+      };
+
+      webpackConfig.plugins.push(
+        new webpack.ProvidePlugin({
+          Buffer: ['buffer', 'Buffer'],
+          process: 'process/browser.js',
+        })
+      );
+
+      // Suppress source-map warnings from node_modules
+      webpackConfig.ignoreWarnings = [/Failed to parse source map/];
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {

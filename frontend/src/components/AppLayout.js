@@ -5,6 +5,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { Home, Send, MapPin, Users, User, BarChart3, MessageSquare, Sun, Moon, LogOut, DollarSign, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 const navItems = [
   { path: "/dashboard", label: "Home", icon: Home },
@@ -57,6 +58,14 @@ export default function AppLayout({ children }) {
           })}
         </nav>
 
+        <div className="p-3 mx-4 mt-2 rounded-xl bg-secondary/30 border border-border">
+          <ConnectButton
+            chainStatus="icon"
+            showBalance={false}
+            accountStatus="address"
+          />
+        </div>
+
         <div className="p-4 border-t border-border space-y-2">
           <button
             onClick={toggleTheme}
@@ -88,6 +97,11 @@ export default function AppLayout({ children }) {
             <span className="font-heading font-bold text-foreground">DollarFlow</span>
           </div>
           <div className="flex items-center gap-2">
+            <ConnectButton
+              chainStatus="none"
+              showBalance={false}
+              accountStatus="avatar"
+            />
             <button onClick={toggleTheme} className="p-2 text-muted-foreground" data-testid="theme-toggle-mobile">
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>

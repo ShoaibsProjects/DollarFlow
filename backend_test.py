@@ -11,8 +11,8 @@ import time
 class DollarFlowAPITester:
     def __init__(self, base_url="https://shield-earnings-app.preview.emergentagent.com/api"):
         self.base_url = base_url
-        self.session_token = None
-        self.user_id = None
+        self.session_token = "test_session_1773697730775"  # Updated for iteration 4
+        self.user_id = "test-user-1773697730774"
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []

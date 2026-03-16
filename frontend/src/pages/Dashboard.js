@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { motion } from "framer-motion";
-import { Send, QrCode, ArrowDownUp, Shield, ArrowUpRight, ArrowDownLeft, ChevronRight, TrendingDown, TrendingUp } from "lucide-react";
+import { Send, QrCode, ArrowDownUp, Shield, ArrowUpRight, ArrowDownLeft, ChevronRight, TrendingDown, TrendingUp, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useNavigate } from "react-router-dom";
+import { useWallet } from '@/hooks/useWallet';
 import axios from "axios";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -68,6 +69,7 @@ function TransactionItem({ tx }) {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { address, isConnected, ethBalance, usdcBalance } = useWallet();
   const [dashboard, setDashboard] = useState(null);
   const [shieldData, setShieldData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -160,6 +162,54 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </motion.div>
+
+      {/* On-Chain Wallet Card */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="rounded-2xl border border-border bg-card p-6"
+        data-testid="wallet-card"
+      >
+        {isConnected ? (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#0052FF]/10 flex items-center justify-center">
+                  <Wallet className="w-5 h-5 text-[#0052FF]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">On-Chain Balance</h3>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {address?.slice(0, 6)}...{address?.slice(-4)}
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-[#00D395]/20 text-[#00D395] font-medium">Connected</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-secondary/30 rounded-xl p-3">
+                <div className="text-xs text-muted-foreground mb-1">USDC Balance</div>
+                <div className="text-lg font-semibold text-foreground">${parseFloat(usdcBalance).toFixed(2)}</div>
+              </div>
+              <div className="bg-secondary/30 rounded-xl p-3">
+                <div className="text-xs text-muted-foreground mb-1">ETH (Gas)</div>
+                <div className="text-lg font-semibold text-foreground">{parseFloat(ethBalance).toFixed(4)}</div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
+              <Wallet className="w-5 h-5 text-muted-foreground" />
+            </div>
+            <div>
+              <h3 className="text-sm font-medium text-muted-foreground">Connect wallet for on-chain transfers</h3>
+              <p className="text-xs text-muted-foreground/60">Use the wallet button in the sidebar</p>
+            </div>
+          </div>
+        )}
       </motion.div>
 
       {/* Quick Actions */}
