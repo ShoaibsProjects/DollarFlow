@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, User, DollarSign, Send as SendIcon, Check, Loader2, ChevronRight } from "lucide-react";
+import { ArrowLeft, User, DollarSign, Send as SendIcon, Check, Loader2, ChevronRight, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
+import { useWallet } from '@/hooks/useWallet';
+import { useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseUnits } from 'viem';
+import { USDC_ADDRESS, ERC20_ABI } from '@/config/wagmi';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -25,6 +29,14 @@ export default function SendMoney() {
   const [customAddress, setCustomAddress] = useState("");
   const [sending, setSending] = useState(false);
   const [contacts, setContacts] = useState(fallbackContacts);
+
+  // On-chain wallet
+  const { isConnected } = useWallet();
+  const { writeContract, data: txHash, isPending: isSending, reset: resetTx } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash: txHash });
+
+  const isOnChainAddress = (addr) => addr?.startsWith('0x') && addr?.length === 42;
+  const isOnChainSend = isConnected && isOnChainAddress(customAddress);
 
   // Load family members as contacts
   useEffect(() => {
@@ -48,10 +60,26 @@ export default function SendMoney() {
   const fee = 0.03;
   const totalAmount = amount ? parseFloat(amount) + fee : 0;
 
+  const handleOnChainSend = () => {
+    const amountInUnits = parseUnits(amount.toString(), 6);
+    writeContract({
+      address: USDC_ADDRESS,
+      abi: ERC20_ABI,
+      functionName: 'transfer',
+      args: [customAddress, amountInUnits],
+    });
+  };
+
   const handleSend = async () => {
+    // On-chain transfer via MetaMask
+    if (isOnChainSend) {
+      handleOnChainSend();
+      return;
+    }
+
+    // Existing backend flow
     setSending(true);
     try {
-      // If recipient is a family member, use the dedicated endpoint to update their balance
       if (recipient?.memberId) {
         await axios.post(
           `${API}/family-vault/send/${recipient.memberId}`,
@@ -75,6 +103,14 @@ export default function SendMoney() {
       setSending(false);
     }
   };
+
+  // Move to success step when on-chain tx confirms
+  useEffect(() => {
+    if (isConfirmed && txHash) {
+      setStep(4);
+      toast.success("On-chain transfer confirmed!");
+    }
+  }, [isConfirmed, txHash]);
 
   return (
     <div className="p-4 lg:p-8 max-w-lg mx-auto" data-testid="send-money-page">
@@ -201,13 +237,22 @@ export default function SendMoney() {
                 </div>
               </div>
             </div>
+            {isOnChainSend && (
+              <div className="rounded-xl bg-[#0052FF]/5 border border-[#0052FF]/20 p-3 mb-4">
+                <p className="text-xs text-[#0052FF] font-medium">On-chain USDC transfer via MetaMask</p>
+                <p className="text-xs text-muted-foreground mt-1">Base Sepolia network</p>
+              </div>
+            )}
             <Button
               onClick={handleSend}
-              disabled={sending}
+              disabled={sending || isSending || isConfirming}
               data-testid="send-confirm-btn"
               className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full py-6 font-semibold"
             >
-              {sending ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Confirm & Send <SendIcon className="ml-2 w-4 h-4" /></>}
+              {isSending ? <>Confirm in MetaMask... <Loader2 className="ml-2 w-4 h-4 animate-spin" /></> :
+               isConfirming ? <>Confirming on-chain... <Loader2 className="ml-2 w-4 h-4 animate-spin" /></> :
+               sending ? <Loader2 className="w-5 h-5 animate-spin" /> :
+               <>Confirm & Send <SendIcon className="ml-2 w-4 h-4" /></>}
             </Button>
           </motion.div>
         )}
@@ -225,12 +270,26 @@ export default function SendMoney() {
             </motion.div>
             <h2 className="font-heading text-2xl font-bold text-foreground mb-2">Payment Sent!</h2>
             <p className="text-muted-foreground mb-1">${parseFloat(amount).toFixed(2)} to {recipient?.name}</p>
-            <p className="text-xs text-[#00D395] mb-8">Confirmed in ~15 seconds</p>
+            {txHash ? (
+              <div className="mb-8">
+                <p className="text-xs text-[#00D395] mb-2">Transaction confirmed on-chain!</p>
+                <a
+                  href={`https://sepolia.basescan.org/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-[#0052FF] hover:underline font-mono"
+                >
+                  {txHash.slice(0, 10)}...{txHash.slice(-8)} <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            ) : (
+              <p className="text-xs text-[#00D395] mb-8">Confirmed in ~15 seconds</p>
+            )}
             <div className="flex gap-3">
               <Button onClick={() => navigate('/dashboard')} variant="outline" className="flex-1 rounded-full" data-testid="send-done-btn">
                 Back to Home
               </Button>
-              <Button onClick={() => { setStep(1); setAmount(""); setRecipient(null); }}
+              <Button onClick={() => { setStep(1); setAmount(""); setRecipient(null); setCustomAddress(""); resetTx(); }}
                 className="flex-1 bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full" data-testid="send-another-btn">
                 Send More
               </Button>

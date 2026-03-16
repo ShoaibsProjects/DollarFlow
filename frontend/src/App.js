@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { Toaster } from "@/components/ui/sonner";
+import Web3Provider from "@/providers/Web3Provider";
 import axios from "axios";
 
 // Pages
@@ -150,12 +151,14 @@ function AppRouter() {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <AppRouter />
-        </BrowserRouter>
-        <Toaster position="top-right" />
-      </AuthProvider>
+      <Web3Provider>
+        <AuthProvider>
+          <BrowserRouter>
+            <AppRouter />
+          </BrowserRouter>
+          <Toaster position="top-right" />
+        </AuthProvider>
+      </Web3Provider>
     </ThemeProvider>
   );
 }
