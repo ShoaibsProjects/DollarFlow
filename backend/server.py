@@ -767,6 +767,115 @@ async def get_dashboard(request: Request):
         "monthly_received": round(sum(t["amount"] for t in txs if t["type"] == "receive"), 2),
     }
 
+# ==================== LIVE FEE DATA ====================
+
+# Cache to avoid hammering APIs on every page load
+_fee_cache = {"data": None, "expires": 0}
+
+@api_router.get("/fees/live")
+async def get_live_fees(amount: float = 200, source: str = "USD", target: str = "PHP"):
+    """Returns live fee comparison data: Wise (real API) + DollarFlow gas estimate."""
+    import time
+    now = time.time()
+
+    # Return cache if fresh (60s TTL)
+    if _fee_cache["data"] and now < _fee_cache["expires"]:
+        return _fee_cache["data"]
+
+    wise_fee = None
+    wise_rate = None
+    dollarflow_fee = 0.03  # fallback
+    base_gas_gwei = None
+
+    # 1) Wise fee quote (free public POST /v3/quotes endpoint, no key needed)
+    try:
+        async with httpx.AsyncClient(timeout=8) as c:
+            resp = await c.post(
+                "https://api.wise.com/v3/quotes",
+                json={
+                    "sourceCurrency": source,
+                    "targetCurrency": target,
+                    "sourceAmount": amount,
+                },
+                headers={"Content-Type": "application/json"},
+            )
+            if resp.status_code == 200:
+                q = resp.json()
+                # Fee is in paymentOptions → pick cheapest
+                options = q.get("paymentOptions", [])
+                if options:
+                    cheapest = min(options, key=lambda o: o.get("fee", {}).get("total", 9999))
+                    wise_fee = cheapest["fee"]["total"]
+                    wise_rate = q.get("rate")
+                elif "fee" in q:
+                    wise_fee = q["fee"]
+                    wise_rate = q.get("rate")
+    except Exception as e:
+        logger.info(f"Wise API unavailable: {e}")
+
+    # 2) Base Sepolia gas price via public RPC
+    try:
+        async with httpx.AsyncClient(timeout=5) as c:
+            resp = await c.post(
+                "https://sepolia.base.org",
+                json={"jsonrpc": "2.0", "method": "eth_gasPrice", "params": [], "id": 1},
+            )
+            if resp.status_code == 200:
+                hex_gas = resp.json().get("result", "0x0")
+                gas_wei = int(hex_gas, 16)
+                base_gas_gwei = round(gas_wei / 1e9, 4)
+                # ERC-20 transfer ≈ 65 000 gas units; ETH price ≈ $2 500
+                eth_price_usd = 2500
+                dollarflow_fee = round((65000 * gas_wei / 1e18) * eth_price_usd, 4)
+                if dollarflow_fee < 0.01:
+                    dollarflow_fee = 0.01  # realistic Base mainnet floor
+    except Exception as e:
+        logger.info(f"Base RPC unavailable: {e}")
+
+    result = {
+        "amount": amount,
+        "source": source,
+        "target": target,
+        "services": [
+            {
+                "name": "Western Union",
+                "fee": 14.00,
+                "speed": "1-3 days",
+                "rate_quality": "Bad",
+                "live": False,
+            },
+            {
+                "name": "Bank Wire",
+                "fee": 35.00,
+                "speed": "3-5 days",
+                "rate_quality": "Poor",
+                "live": False,
+            },
+            {
+                "name": "Wise",
+                "fee": round(wise_fee, 2) if wise_fee is not None else 4.20,
+                "speed": "1-2 days",
+                "rate_quality": "Good",
+                "exchange_rate": wise_rate,
+                "live": wise_fee is not None,
+            },
+            {
+                "name": "DollarFlow",
+                "fee": round(dollarflow_fee, 2),
+                "speed": "~15 sec",
+                "rate_quality": "Best",
+                "live": base_gas_gwei is not None,
+            },
+        ],
+        "base_gas_gwei": base_gas_gwei,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    _fee_cache["data"] = result
+    _fee_cache["expires"] = now + 60  # cache 60s
+
+    return result
+
 # Include router
 app.include_router(api_router)
 

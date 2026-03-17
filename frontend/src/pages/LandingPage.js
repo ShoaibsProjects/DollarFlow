@@ -1,8 +1,11 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { ArrowRight, Shield, Users, MapPin, MessageSquare, BarChart3, ChevronRight, Star, Zap, DollarSign, Globe } from "lucide-react";
+import { ArrowRight, Shield, Users, MapPin, MessageSquare, BarChart3, ChevronRight, Star, Zap, DollarSign, Globe, Wifi } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
+import axios from "axios";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const fadeUp = {
   initial: { opacity: 0, y: 40 },
@@ -83,11 +86,11 @@ const features = [
   }
 ];
 
-const feeComparison = [
-  { service: "Western Union", fee: "$14.00", time: "1-3 days", rate: "Bad" },
-  { service: "Bank Wire", fee: "$25-45", time: "3-5 days", rate: "Poor" },
-  { service: "Wise", fee: "$4.20", time: "1-2 days", rate: "Good" },
-  { service: "DollarFlow", fee: "$0.03", time: "~15 sec", rate: "Best", highlight: true }
+const feeComparisonFallback = [
+  { service: "Western Union", fee: "$14.00", time: "1-3 days", rate: "Bad", live: false },
+  { service: "Bank Wire", fee: "$25-45", time: "3-5 days", rate: "Poor", live: false },
+  { service: "Wise", fee: "$4.20", time: "1-2 days", rate: "Good", live: false },
+  { service: "DollarFlow", fee: "$0.03", time: "~15 sec", rate: "Best", highlight: true, live: false }
 ];
 
 export default function LandingPage() {
@@ -95,6 +98,34 @@ export default function LandingPage() {
   const heroRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
   const heroY = useTransform(scrollYProgress, [0, 1], [0, 200]);
+
+  const [feeComparison, setFeeComparison] = useState(feeComparisonFallback);
+  const [liveDollarFlowFee, setLiveDollarFlowFee] = useState("$0.03");
+  const [hasLiveData, setHasLiveData] = useState(false);
+
+  useEffect(() => {
+    const fetchLiveFees = async () => {
+      try {
+        const res = await axios.get(`${API}/fees/live`, { params: { amount: 200 } });
+        const services = res.data.services;
+        const mapped = services.map((s) => ({
+          service: s.name,
+          fee: `$${s.fee.toFixed(2)}`,
+          time: s.speed,
+          rate: s.rate_quality,
+          highlight: s.name === "DollarFlow",
+          live: s.live,
+        }));
+        setFeeComparison(mapped);
+        const df = services.find((s) => s.name === "DollarFlow");
+        if (df) setLiveDollarFlowFee(`$${df.fee.toFixed(2)}`);
+        setHasLiveData(services.some((s) => s.live));
+      } catch {
+        // keep fallback
+      }
+    };
+    fetchLiveFees();
+  }, []);
 
   return (
     <div className="min-h-screen bg-background overflow-hidden" data-testid="landing-page">
@@ -172,7 +203,7 @@ export default function LandingPage() {
               {[
                 { value: "$48B", label: "Lost to fees annually" },
                 { value: "15s", label: "Average transfer time" },
-                { value: "$0.03", label: "Average fee" }
+                { value: liveDollarFlowFee, label: "Average fee" }
               ].map((stat, i) => (
                 <div key={i}>
                   <div className="font-heading text-2xl sm:text-3xl font-bold text-foreground">{stat.value}</div>
@@ -225,7 +256,14 @@ export default function LandingPage() {
             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-foreground mb-4">
               Sending $200 to Philippines
             </h2>
-            <p className="text-base text-muted-foreground">See how DollarFlow compares to traditional services</p>
+            <p className="text-base text-muted-foreground">
+              See how DollarFlow compares to traditional services
+              {hasLiveData && (
+                <span className="inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-[#00D395]/10 text-[#00D395] text-xs font-medium">
+                  <Wifi className="w-3 h-3" /> Live data
+                </span>
+              )}
+            </p>
           </motion.div>
 
           <motion.div {...fadeUp} className="rounded-2xl border border-border overflow-hidden">
@@ -243,8 +281,9 @@ export default function LandingPage() {
                 }`}
                 data-testid={`fee-row-${i}`}
               >
-                <div className={`font-medium ${row.highlight ? 'text-[#0052FF]' : 'text-foreground'}`}>
+                <div className={`font-medium flex items-center gap-1.5 ${row.highlight ? 'text-[#0052FF]' : 'text-foreground'}`}>
                   {row.service}
+                  {row.live && <span className="w-1.5 h-1.5 rounded-full bg-[#00D395] animate-pulse" />}
                 </div>
                 <div className={row.highlight ? 'text-[#00D395] font-semibold' : 'text-foreground'}>{row.fee}</div>
                 <div className={row.highlight ? 'text-[#00D395] font-semibold' : 'text-foreground'}>{row.time}</div>
@@ -312,7 +351,7 @@ export default function LandingPage() {
           <motion.div {...fadeUp}>
             <h2 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-bold text-foreground mb-6">
               Start sending money for{" "}
-              <span className="text-[#00D395]">$0.03</span>
+              <span className="text-[#00D395]">{liveDollarFlowFee}</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
               Join thousands of people who are done paying $14 fees to send money home. Set up takes 30 seconds.
