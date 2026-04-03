@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Home, Send, MapPin, Users, User, BarChart3, MessageSquare, Sun, Moon, LogOut, DollarSign, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion, AnimatePresence } from "framer-motion";
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
@@ -35,6 +36,14 @@ export default function AppLayout({ children }) {
             </div>
             <span className="font-heading font-bold text-lg text-foreground">DollarFlow</span>
           </div>
+        </div>
+
+        <div className="p-3 mx-4 mt-2 rounded-xl bg-secondary/30 border border-border">
+          <ConnectButton
+            chainStatus="icon"
+            showBalance={false}
+            accountStatus="address"
+          />
         </div>
 
         <nav className="flex-1 p-4 space-y-1">

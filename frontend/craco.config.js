@@ -10,7 +10,7 @@ const isDevServer = process.env.NODE_ENV !== "production";
 // Environment variable overrides
 const config = {
   enableHealthCheck: process.env.ENABLE_HEALTH_CHECK === "true",
-  enableVisualEdits: isDevServer, // Only enable during dev server
+  enableVisualEdits: isDevServer && process.env.DISABLE_VISUAL_EDITS !== "true", // Only enable during dev server
 };
 
 // Conditionally load visual edits modules only in dev mode
@@ -85,6 +85,31 @@ const webpackConfig = {
             '**/public/**',
         ],
       };
+
+      // Node.js polyfills for wagmi/viem/walletconnect
+      webpackConfig.resolve.fallback = {
+        ...webpackConfig.resolve.fallback,
+        buffer: require.resolve('buffer/'),
+        crypto: require.resolve('crypto-browserify'),
+        stream: require.resolve('stream-browserify'),
+        os: require.resolve('os-browserify/browser'),
+        https: require.resolve('https-browserify'),
+        http: require.resolve('stream-http'),
+        url: require.resolve('url/'),
+        assert: require.resolve('assert/'),
+      };
+      // Alias process/browser so all modules can resolve it
+      webpackConfig.resolve.alias = {
+        ...webpackConfig.resolve.alias,
+        'process/browser': require.resolve('process/browser.js'),
+      };
+      webpackConfig.plugins = [
+        ...webpackConfig.plugins,
+        new webpack.ProvidePlugin({
+          Buffer: ['buffer', 'Buffer'],
+          process: require.resolve('process/browser.js'),
+        }),
+      ];
 
       // Add health check plugin to webpack if enabled
       if (config.enableHealthCheck && healthPluginInstance) {

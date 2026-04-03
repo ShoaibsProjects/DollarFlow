@@ -103,7 +103,6 @@ export default function SendMoney() {
     // Existing backend flow
     setSending(true);
     try {
-      // If recipient is a family member, use the dedicated endpoint to update their balance
       if (recipient?.memberId) {
         await axios.post(
           `${API}/family-vault/send/${recipient.memberId}`,
