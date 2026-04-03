@@ -6,12 +6,19 @@ import os
 import logging
 import httpx
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone, timedelta
 import random
 import json
+import re
+import hashlib
+import html
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from starlette.responses import JSONResponse
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -25,7 +32,92 @@ db = client[os.environ['DB_NAME']]
 EMERGENT_LLM_KEY = os.environ.get('EMERGENT_LLM_KEY', '')
 
 app = FastAPI()
+
+# ==================== SECURITY: RATE LIMITING ====================
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(status_code=429, content={"detail": "Too many requests. Please try again later."})
+
+# ==================== SECURITY: HEADERS MIDDLEWARE ====================
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
+
 api_router = APIRouter(prefix="/api")
+
+# ==================== SECURITY: INPUT VALIDATION MODELS ====================
+
+MAX_AMOUNT = 50000.0
+MIN_AMOUNT = 0.01
+MAX_STRING = 200
+MAX_CHAT_MSG = 500  # Limit chat messages to save LLM credits
+
+def sanitize_string(value: str, max_len: int = MAX_STRING) -> str:
+    """Strip HTML tags, trim whitespace, limit length."""
+    cleaned = html.escape(value.strip())
+    return cleaned[:max_len]
+
+def validate_amount(value: float) -> float:
+    if value < MIN_AMOUNT:
+        raise ValueError(f"Amount must be at least ${MIN_AMOUNT}")
+    if value > MAX_AMOUNT:
+        raise ValueError(f"Amount cannot exceed ${MAX_AMOUNT}")
+    return round(value, 2)
+
+class TransactionRequest(BaseModel):
+    type: str = Field(default="send", pattern="^(send|receive|convert)$")
+    amount: float = Field(gt=0, le=MAX_AMOUNT)
+    recipient_name: Optional[str] = Field(default=None, max_length=MAX_STRING)
+    recipient_address: Optional[str] = Field(default=None, max_length=100)
+    category: Optional[str] = Field(default="general", max_length=50)
+    note: Optional[str] = Field(default=None, max_length=MAX_STRING)
+    pin: Optional[str] = Field(default=None, max_length=6)
+
+    @field_validator('amount')
+    @classmethod
+    def check_amount(cls, v):
+        return validate_amount(v)
+
+class FamilyMemberRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    relationship: Optional[str] = Field(default="Family", max_length=50)
+    avatar_color: Optional[str] = Field(default="#4ECDC4", max_length=10)
+    monthly_allocation: float = Field(default=100, ge=0, le=MAX_AMOUNT)
+
+class FamilySendRequest(BaseModel):
+    amount: float = Field(gt=0, le=MAX_AMOUNT)
+    pin: Optional[str] = Field(default=None, max_length=6)
+
+    @field_validator('amount')
+    @classmethod
+    def check_amount(cls, v):
+        return validate_amount(v)
+
+class ChatRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=MAX_CHAT_MSG)
+
+class SettingsRequest(BaseModel):
+    country: Optional[str] = Field(default=None, max_length=50)
+    currency: Optional[str] = Field(default=None, pattern="^[A-Z]{3}$")
+    use_case: Optional[str] = Field(default=None, max_length=100)
+    inflation_shield: Optional[bool] = None
+    shield_percentage: Optional[int] = Field(default=None, ge=10, le=100)
+
+class PinRequest(BaseModel):
+    pin: str = Field(min_length=4, max_length=6, pattern="^[0-9]+$")
+
+def hash_pin(pin: str) -> str:
+    """Hash PIN with SHA-256 for secure storage."""
+    return hashlib.sha256(pin.encode()).hexdigest()
 
 # ==================== MODELS ====================
 
@@ -131,6 +223,7 @@ async def get_current_user(request: Request) -> dict:
     return user
 
 @api_router.post("/auth/session")
+@limiter.limit("10/minute")
 async def create_session(request: Request, response: Response):
     body = await request.json()
     session_id = body.get("session_id")
@@ -293,35 +386,58 @@ async def get_transactions(request: Request):
     return txs
 
 @api_router.post("/transactions")
+@limiter.limit("30/minute")
 async def create_transaction(request: Request):
     user = await get_current_user(request)
     body = await request.json()
+
+    # Validate input with Pydantic model
+    try:
+        tx_req = TransactionRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # Verify transaction PIN if user has one set
+    user_pin = user.get("transaction_pin")
+    if user_pin and tx_req.type == "send":
+        if not tx_req.pin:
+            raise HTTPException(status_code=403, detail="Transaction PIN required")
+        if hash_pin(tx_req.pin) != user_pin:
+            raise HTTPException(status_code=403, detail="Incorrect PIN")
+
     tx = {
         "id": f"tx_{uuid.uuid4().hex[:12]}",
         "user_id": user["user_id"],
-        "type": body.get("type", "send"),
-        "amount": body["amount"],
+        "type": tx_req.type,
+        "amount": tx_req.amount,
         "currency": "USDC",
-        "recipient_name": body.get("recipient_name"),
-        "recipient_address": body.get("recipient_address"),
-        "category": body.get("category", "general"),
+        "recipient_name": sanitize_string(tx_req.recipient_name) if tx_req.recipient_name else None,
+        "recipient_address": tx_req.recipient_address,
+        "category": tx_req.category or "general",
         "status": "completed",
         "fee": 0.03,
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "note": body.get("note")
+        "note": sanitize_string(tx_req.note) if tx_req.note else None
     }
     await db.transactions.insert_one(tx)
     tx.pop("_id", None)
 
-    # If sending to a family member, update their balance
-    recipient_name = body.get("recipient_name", "")
+    # If sending to a family member, update their balance (use exact match, not regex)
+    recipient_name = tx_req.recipient_name or ""
     if recipient_name and tx["type"] == "send":
         vault = await db.family_vaults.find_one({"user_id": user["user_id"]}, {"_id": 0})
         if vault:
             member = await db.family_members.find_one(
-                {"vault_id": vault["id"], "name": {"$regex": f"^{recipient_name}$", "$options": "i"}},
+                {"vault_id": vault["id"], "name": recipient_name.strip()},
                 {"_id": 0}
             )
+            if not member:
+                # Case-insensitive fallback with safe regex (escape user input)
+                safe_name = re.escape(recipient_name.strip())
+                member = await db.family_members.find_one(
+                    {"vault_id": vault["id"], "name": {"$regex": f"^{safe_name}$", "$options": "i"}},
+                    {"_id": 0}
+                )
             if member:
                 new_balance = member["current_balance"] + body["amount"]
                 await db.family_members.update_one(
@@ -356,9 +472,15 @@ async def get_family_vault(request: Request):
     return {"vault": vault, "members": members}
 
 @api_router.post("/family-vault/member")
+@limiter.limit("10/minute")
 async def add_family_member(request: Request):
     user = await get_current_user(request)
     body = await request.json()
+
+    try:
+        member_req = FamilyMemberRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
     vault = await db.family_vaults.find_one({"user_id": user["user_id"]}, {"_id": 0})
     if not vault:
         vault_id = f"vault_{uuid.uuid4().hex[:12]}"
@@ -373,10 +495,10 @@ async def add_family_member(request: Request):
         "id": f"member_{uuid.uuid4().hex[:12]}",
         "vault_id": vault["id"],
         "user_id": user["user_id"],
-        "name": body["name"],
-        "relationship": body.get("relationship", "Family"),
-        "avatar_color": body.get("avatar_color", "#4ECDC4"),
-        "monthly_allocation": body.get("monthly_allocation", 100),
+        "name": sanitize_string(member_req.name, 50),
+        "relationship": sanitize_string(member_req.relationship or "Family", 50),
+        "avatar_color": member_req.avatar_color or "#4ECDC4",
+        "monthly_allocation": member_req.monthly_allocation,
         "current_balance": 0,
         "visibility_enabled": True
     }
@@ -399,13 +521,27 @@ async def update_family_member(member_id: str, request: Request):
     return member
 
 @api_router.post("/family-vault/send/{member_id}")
+@limiter.limit("20/minute")
 async def send_to_family_member(member_id: str, request: Request):
     """Send funds to a specific family member — updates their balance and creates a transaction."""
     user = await get_current_user(request)
     body = await request.json()
-    amount = body.get("amount", 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
+
+    # Validate input
+    try:
+        send_req = FamilySendRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # Verify transaction PIN if user has one set
+    user_pin = user.get("transaction_pin")
+    if user_pin:
+        if not send_req.pin:
+            raise HTTPException(status_code=403, detail="Transaction PIN required")
+        if hash_pin(send_req.pin) != user_pin:
+            raise HTTPException(status_code=403, detail="Incorrect PIN")
+
+    amount = send_req.amount
 
     member = await db.family_members.find_one(
         {"id": member_id, "user_id": user["user_id"]}, {"_id": 0}
@@ -611,10 +747,17 @@ async def update_inflation_shield(request: Request):
 # ==================== CHAT-TO-PAY ====================
 
 @api_router.post("/chat")
+@limiter.limit("15/minute")
 async def chat_to_pay(request: Request):
     user = await get_current_user(request)
     body = await request.json()
-    user_message = body.get("message", "")
+
+    try:
+        chat_req = ChatRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    user_message = sanitize_string(chat_req.message, MAX_CHAT_MSG)
     
     # Store user message
     user_msg = {
@@ -731,12 +874,81 @@ async def get_chat_history(request: Request):
 async def update_settings(request: Request):
     user = await get_current_user(request)
     body = await request.json()
-    allowed = ["country", "currency", "use_case", "inflation_shield", "shield_percentage"]
-    update = {k: v for k, v in body.items() if k in allowed}
+
+    try:
+        settings_req = SettingsRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    update = {}
+    if settings_req.country is not None:
+        update["country"] = sanitize_string(settings_req.country, 50)
+    if settings_req.currency is not None:
+        update["currency"] = settings_req.currency
+    if settings_req.use_case is not None:
+        update["use_case"] = sanitize_string(settings_req.use_case, 100)
+    if settings_req.inflation_shield is not None:
+        update["inflation_shield"] = settings_req.inflation_shield
+    if settings_req.shield_percentage is not None:
+        update["shield_percentage"] = settings_req.shield_percentage
     if update:
         await db.users.update_one({"user_id": user["user_id"]}, {"$set": update})
     updated = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
     return updated
+
+# ==================== SECURITY: TRANSACTION PIN ====================
+
+@api_router.post("/security/pin")
+async def set_transaction_pin(request: Request):
+    """Set or update the user's transaction PIN (4-6 digits)."""
+    user = await get_current_user(request)
+    body = await request.json()
+    try:
+        pin_req = PinRequest(**body)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    hashed = hash_pin(pin_req.pin)
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"transaction_pin": hashed}}
+    )
+    return {"message": "Transaction PIN set successfully", "has_pin": True}
+
+@api_router.get("/security/pin/status")
+async def pin_status(request: Request):
+    """Check if user has a transaction PIN set."""
+    user = await get_current_user(request)
+    return {"has_pin": bool(user.get("transaction_pin"))}
+
+@api_router.delete("/security/pin")
+async def remove_transaction_pin(request: Request):
+    """Remove the transaction PIN (requires current PIN)."""
+    user = await get_current_user(request)
+    body = await request.json()
+    current_pin = body.get("pin", "")
+    if not user.get("transaction_pin"):
+        raise HTTPException(status_code=400, detail="No PIN set")
+    if hash_pin(current_pin) != user["transaction_pin"]:
+        raise HTTPException(status_code=403, detail="Incorrect PIN")
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$unset": {"transaction_pin": ""}}
+    )
+    return {"message": "Transaction PIN removed", "has_pin": False}
+
+# ==================== SESSION SECURITY ====================
+
+@api_router.post("/security/sessions/cleanup")
+async def cleanup_expired_sessions(request: Request):
+    """Purge expired sessions for the current user."""
+    user = await get_current_user(request)
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.user_sessions.delete_many({
+        "user_id": user["user_id"],
+        "expires_at": {"$lt": now}
+    })
+    return {"purged": result.deleted_count}
 
 @api_router.get("/dashboard")
 async def get_dashboard(request: Request):
@@ -765,6 +977,7 @@ async def get_dashboard(request: Request):
         "inflation_shield_active": user.get("inflation_shield", False),
         "monthly_sent": round(sum(t["amount"] for t in txs if t["type"] == "send"), 2),
         "monthly_received": round(sum(t["amount"] for t in txs if t["type"] == "receive"), 2),
+        "has_pin": bool(user.get("transaction_pin")),
     }
 
 # ==================== LIVE FEE DATA ====================

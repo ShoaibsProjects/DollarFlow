@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, User, DollarSign, Send as SendIcon, Check, Loader2, ChevronRight, ExternalLink } from "lucide-react";
+import { ArrowLeft, User, DollarSign, Send as SendIcon, Check, Loader2, ChevronRight, ExternalLink, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
@@ -38,13 +38,20 @@ export default function SendMoney() {
   const isOnChainAddress = (addr) => addr?.startsWith('0x') && addr?.length === 42;
   const isOnChainSend = isConnected && isOnChainAddress(customAddress);
 
-  // Load family members as contacts
+  const [hasPin, setHasPin] = useState(false);
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [pinValue, setPinValue] = useState("");
+
+  // Load family members as contacts + check PIN status
   useEffect(() => {
     const loadContacts = async () => {
       try {
-        const res = await axios.get(`${API}/family-vault`, { withCredentials: true });
-        if (res.data.members?.length > 0) {
-          const familyContacts = res.data.members.map(m => ({
+        const [vaultRes, pinRes] = await Promise.all([
+          axios.get(`${API}/family-vault`, { withCredentials: true }),
+          axios.get(`${API}/security/pin/status`, { withCredentials: true }),
+        ]);
+        if (vaultRes.data.members?.length > 0) {
+          const familyContacts = vaultRes.data.members.map(m => ({
             name: m.name,
             relationship: m.relationship,
             color: m.avatar_color,
@@ -52,6 +59,7 @@ export default function SendMoney() {
           }));
           setContacts(familyContacts);
         }
+        setHasPin(pinRes.data.has_pin);
       } catch { /* use fallback */ }
     };
     loadContacts();
@@ -59,6 +67,21 @@ export default function SendMoney() {
 
   const fee = 0.03;
   const totalAmount = amount ? parseFloat(amount) + fee : 0;
+
+  // Intercept send — if PIN is set, prompt first
+  const attemptSend = () => {
+    if (hasPin && !isOnChainSend) {
+      setPinValue("");
+      setPinPromptOpen(true);
+    } else {
+      handleSend();
+    }
+  };
+
+  const confirmPinAndSend = () => {
+    setPinPromptOpen(false);
+    handleSend(pinValue);
+  };
 
   const handleOnChainSend = () => {
     const amountInUnits = parseUnits(amount.toString(), 6);
@@ -70,7 +93,7 @@ export default function SendMoney() {
     });
   };
 
-  const handleSend = async () => {
+  const handleSend = async (pin) => {
     // On-chain transfer via MetaMask
     if (isOnChainSend) {
       handleOnChainSend();
@@ -84,7 +107,7 @@ export default function SendMoney() {
       if (recipient?.memberId) {
         await axios.post(
           `${API}/family-vault/send/${recipient.memberId}`,
-          { amount: parseFloat(amount) },
+          { amount: parseFloat(amount), ...(pin ? { pin } : {}) },
           { withCredentials: true }
         );
       } else {
@@ -93,7 +116,8 @@ export default function SendMoney() {
           amount: parseFloat(amount),
           recipient_name: recipient?.name || "Unknown",
           recipient_address: customAddress || `0x${Math.random().toString(16).slice(2, 42)}`,
-          category: "transfer"
+          category: "transfer",
+          ...(pin ? { pin } : {}),
         }, { withCredentials: true });
       }
       setStep(4);
@@ -245,7 +269,7 @@ export default function SendMoney() {
               </div>
             )}
             <Button
-              onClick={handleSend}
+              onClick={attemptSend}
               disabled={sending || isSending || isConfirming}
               data-testid="send-confirm-btn"
               className="w-full bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full py-6 font-semibold"
@@ -298,6 +322,54 @@ export default function SendMoney() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PIN Verification Dialog */}
+      {pinPromptOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" data-testid="pin-prompt-overlay">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-card border border-border rounded-2xl p-6 w-full max-w-sm shadow-xl"
+          >
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 rounded-full bg-[#0052FF]/10 flex items-center justify-center mx-auto mb-3">
+                <Lock className="w-6 h-6 text-[#0052FF]" />
+              </div>
+              <h3 className="font-heading text-lg font-bold text-foreground">Enter PIN</h3>
+              <p className="text-xs text-muted-foreground mt-1">Confirm your transaction PIN to send ${amount}</p>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Enter PIN"
+              value={pinValue}
+              onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              autoFocus
+              data-testid="send-pin-input"
+              className="w-full text-center text-2xl tracking-[0.5em] font-mono py-3 rounded-xl border border-border bg-background text-foreground outline-none focus:ring-2 focus:ring-[#0052FF] mb-4"
+            />
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setPinPromptOpen(false)}
+                className="flex-1 rounded-full"
+                data-testid="pin-cancel-btn"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={confirmPinAndSend}
+                disabled={pinValue.length < 4}
+                className="flex-1 bg-[#0052FF] hover:bg-[#0040CC] text-white rounded-full"
+                data-testid="pin-confirm-send-btn"
+              >
+                Confirm
+              </Button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

@@ -2,13 +2,16 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
-import { User, Shield, Bell, Lock, Globe, Moon, Sun, LogOut, ChevronRight, Wallet, MapPin, Settings } from "lucide-react";
+import { User, Shield, Bell, Lock, Globe, Moon, Sun, LogOut, ChevronRight, Wallet, MapPin, Settings, ShieldCheck, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import axios from "axios";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -50,6 +53,10 @@ export default function Profile() {
   const [shieldEnabled, setShieldEnabled] = useState(false);
   const [shieldPercentage, setShieldPercentage] = useState([100]);
   const [selectedCountry, setSelectedCountry] = useState("PH");
+  const [hasPin, setHasPin] = useState(false);
+  const [pinDialogOpen, setPinDialogOpen] = useState(false);
+  const [pinInput, setPinInput] = useState("");
+  const [pinConfirm, setPinConfirm] = useState("");
 
   useEffect(() => {
     if (user) {
@@ -58,6 +65,14 @@ export default function Profile() {
       const country = countries.find(c => c.currency === user.currency);
       if (country) setSelectedCountry(country.code);
     }
+    // Check PIN status
+    const checkPin = async () => {
+      try {
+        const res = await axios.get(`${API}/security/pin/status`, { withCredentials: true });
+        setHasPin(res.data.has_pin);
+      } catch { /* ignore */ }
+    };
+    checkPin();
   }, [user]);
 
   const updateSettings = async (updates) => {
@@ -90,6 +105,43 @@ export default function Profile() {
   const handleLogout = async () => {
     await logout();
     navigate('/');
+  };
+
+  const handleSetPin = async () => {
+    if (pinInput.length < 4 || pinInput.length > 6 || !/^\d+$/.test(pinInput)) {
+      toast.error("PIN must be 4-6 digits");
+      return;
+    }
+    if (pinInput !== pinConfirm) {
+      toast.error("PINs don't match");
+      return;
+    }
+    try {
+      await axios.post(`${API}/security/pin`, { pin: pinInput }, { withCredentials: true });
+      toast.success("Transaction PIN set!");
+      setHasPin(true);
+      setPinDialogOpen(false);
+      setPinInput("");
+      setPinConfirm("");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to set PIN");
+    }
+  };
+
+  const handleRemovePin = async () => {
+    if (!pinInput || !/^\d+$/.test(pinInput)) {
+      toast.error("Enter your current PIN");
+      return;
+    }
+    try {
+      await axios.delete(`${API}/security/pin`, { data: { pin: pinInput }, withCredentials: true });
+      toast.success("Transaction PIN removed");
+      setHasPin(false);
+      setPinDialogOpen(false);
+      setPinInput("");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Incorrect PIN");
+    }
   };
 
   return (
@@ -199,10 +251,91 @@ export default function Profile() {
           </SettingRow>
 
           <SettingRow icon={Bell} label="Notifications" description="Manage alerts and updates" />
-          <SettingRow icon={Lock} label="Security" description="PIN, biometrics, and 2FA" />
+
+          <div
+            onClick={() => { setPinDialogOpen(true); setPinInput(""); setPinConfirm(""); }}
+            className="w-full flex items-center gap-4 p-4 hover:bg-secondary/30 transition-colors rounded-xl text-left cursor-pointer"
+            data-testid="security-pin-row"
+          >
+            <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
+              {hasPin ?
+                <ShieldCheck className="w-5 h-5 text-[#00D395]" /> :
+                <ShieldAlert className="w-5 h-5 text-[#FF6B6B]" />
+              }
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-foreground">Transaction PIN</p>
+              <p className="text-xs text-muted-foreground">
+                {hasPin ? "PIN is active — required for all sends" : "No PIN set — add one for security"}
+              </p>
+            </div>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+              hasPin ? 'bg-[#00D395]/10 text-[#00D395]' : 'bg-[#FF6B6B]/10 text-[#FF6B6B]'
+            }`}>
+              {hasPin ? "Active" : "Off"}
+            </span>
+          </div>
+
           <SettingRow icon={Wallet} label="Connected Wallets" description="Manage blockchain wallets" />
         </div>
       </motion.div>
+
+      {/* PIN Dialog */}
+      <Dialog open={pinDialogOpen} onOpenChange={setPinDialogOpen}>
+        <DialogContent className="rounded-2xl" data-testid="pin-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {hasPin ? "Manage Transaction PIN" : "Set Transaction PIN"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <p className="text-sm text-muted-foreground">
+              {hasPin
+                ? "Your PIN is required before sending any money. Enter your current PIN to remove it."
+                : "Set a 4-6 digit PIN to protect your transactions. You'll need to enter it before every send."}
+            </p>
+            <div>
+              <Label>{hasPin ? "Current PIN" : "New PIN"}</Label>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                placeholder={hasPin ? "Enter current PIN" : "Enter 4-6 digit PIN"}
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                data-testid="pin-input"
+                className="mt-1 rounded-xl text-center text-lg tracking-[0.5em] font-mono"
+              />
+            </div>
+            {!hasPin && (
+              <div>
+                <Label>Confirm PIN</Label>
+                <Input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={6}
+                  placeholder="Confirm PIN"
+                  value={pinConfirm}
+                  onChange={(e) => setPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  data-testid="pin-confirm-input"
+                  className="mt-1 rounded-xl text-center text-lg tracking-[0.5em] font-mono"
+                />
+              </div>
+            )}
+            <Button
+              onClick={hasPin ? handleRemovePin : handleSetPin}
+              data-testid="pin-submit-btn"
+              className={`w-full rounded-full ${
+                hasPin
+                  ? 'bg-[#FF6B6B] hover:bg-[#e55a5a] text-white'
+                  : 'bg-[#0052FF] hover:bg-[#0040CC] text-white'
+              }`}
+            >
+              {hasPin ? "Remove PIN" : "Set PIN"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Logout */}
       <motion.div
