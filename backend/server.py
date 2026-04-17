@@ -961,8 +961,8 @@ async def get_dashboard(request: Request):
     all_txs = await db.transactions.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(1000)
     received = sum(t["amount"] for t in all_txs if t["type"] == "receive")
     sent = sum(t["amount"] + t.get("fee", 0.03) for t in all_txs if t["type"] == "send")
-    # Start with a base of 2500 USDC (initial deposit) and adjust with transactions
-    base_balance = user.get("initial_balance", 2500.00)
+    # Start with a base USDC balance (initial deposit) and adjust with transactions
+    base_balance = user.get("initial_balance", 86000.00)
     total_balance = round(base_balance + received - sent, 2)
     
     currency = user.get("currency", "USD")
