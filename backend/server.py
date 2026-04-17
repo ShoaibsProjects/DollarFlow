@@ -962,7 +962,7 @@ async def get_dashboard(request: Request):
     received = sum(t["amount"] for t in all_txs if t["type"] == "receive")
     sent = sum(t["amount"] + t.get("fee", 0.03) for t in all_txs if t["type"] == "send")
     # Start with a base USDC balance (initial deposit) and adjust with transactions
-    base_balance = user.get("initial_balance", 86000.00)
+    base_balance = user.get("initial_balance", 96000.00)
     total_balance = round(base_balance + received - sent, 2)
     
     currency = user.get("currency", "USD")
