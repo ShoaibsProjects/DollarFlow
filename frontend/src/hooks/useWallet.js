@@ -23,10 +23,15 @@ export function useWallet() {
 
   const usdcBalance = usdcRaw ? formatUnits(usdcRaw, 6) : '0';
 
+  // Use raw value with formatUnits for full precision on small balances
+  const formattedEth = ethBalance?.value !== undefined
+    ? formatUnits(ethBalance.value, 18)
+    : '0';
+
   return {
     address,
     isConnected,
-    ethBalance: ethBalance?.formatted || '0',
+    ethBalance: formattedEth,
     usdcBalance,
     refetchUsdc,
   };
