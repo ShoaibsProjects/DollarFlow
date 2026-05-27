@@ -73,8 +73,10 @@ Build DollarFlow — a decentralized USDC stablecoin payment platform for global
 - [x] Mock data seeded automatically
 
 ### P1 (High Value)
-- [ ] Real wallet connection with RainbowKit + Wagmi on Base Sepolia
-- [ ] Solidity FamilyVault smart contract deployment
+- [x] Real wallet connection with RainbowKit + Wagmi on Base Sepolia
+- [x] ETH balance display fix — uses formatUnits for full precision (Apr 17, 2026)
+- [ ] Solidity FamilyVault smart contract deployment on Base Sepolia
+- [ ] On-chain execution for Chat-to-Pay (wire NLP intents to Web3)
 - [ ] Real-time transaction tracking on blockchain
 - [ ] Onboarding flow (4-step wizard)
 - [ ] PWA manifest for mobile install
@@ -88,8 +90,10 @@ Build DollarFlow — a decentralized USDC stablecoin payment platform for global
 - [ ] Push notifications
 
 ## Next Tasks
-1. Add real wallet connection (RainbowKit + Wagmi + Viem)
-2. Deploy FamilyVault.sol smart contract on Base Sepolia
-3. Build the 4-step onboarding wizard
-4. Add confetti animation on send success
-5. Polish light mode theme
+1. Deploy FamilyVault.sol smart contract on Base Sepolia
+2. Wire Chat-to-Pay to on-chain Web3 transactions
+3. ENS resolution for human-readable wallet addresses
+4. Build the 4-step onboarding wizard
+5. Add confetti animation on send success
+6. Polish light mode theme
+7. Migrate from MongoDB to PostgreSQL

@@ -195,7 +195,7 @@ export default function Dashboard() {
               </div>
               <div className="bg-secondary/30 rounded-xl p-3">
                 <div className="text-xs text-muted-foreground mb-1">ETH (Gas)</div>
-                <div className="text-lg font-semibold text-foreground">{parseFloat(ethBalance).toFixed(4)}</div>
+                <div className="text-lg font-semibold text-foreground" data-testid="eth-balance-value">{parseFloat(ethBalance).toFixed(5)}</div>
               </div>
             </div>
           </div>
