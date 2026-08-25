@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Build outputs
+frontend/dist/
+frontend/build/
+dist/
+
+# Environment & secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Platform scaffolding (not part of the application)
+.emergent/
+.gitconfig
+memory/
+test_reports/
+test_result.md
+auth_testing.md
+backend_test.py
+test_bug_fixes.py
+design_guidelines.json
+frontend/check_webpack.js
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
